@@ -352,6 +352,7 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.path.append(".")
     np.random.seed(0)
     torch.manual_seed(0)
     main()
