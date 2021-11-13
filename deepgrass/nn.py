@@ -172,7 +172,7 @@ class ModelQ(torch.nn.Module):
         self.conv3 = nn.Conv1d(8, 8, kernel_size=3, padding='same')
         self.conv4 = nn.Conv1d(8, 8, kernel_size=3, padding='same')
 
-        self.rnn = nn.LSTM(obs_dim+input_dim, 8, num_layers=1 , batch_first=True)
+        self.rnn = nn.LSTM(in_dim, 8, num_layers=1 , batch_first=True)
         
         linears=[]
         prev_d=state_dim+8
