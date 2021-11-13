@@ -4,7 +4,9 @@ import math
 from deepgrass.model import SSM
 from deepgrass.vssm import VariationalStateSpaceModel
 import importlib
+import sys
 
+sys.path.append(".")
 
 def build_model(config,dataset,device=None):
     input_dim = dataset.input_dim if dataset.input_dim is not None else 0
