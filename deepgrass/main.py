@@ -20,7 +20,8 @@ import deepgrass
 from deepgrass.data_util import load_data
 from deepgrass.plot_loss import plot_loss, plot_loss_detail
 from deepgrass.model import SSM
-from deepgrass.vssm import VariationalStateSpaceModel, ModelF, ModelH, ModelQ, ModelQ0, ModelP0
+from deepgrass.vssm import VariationalStateSpaceModel
+from deepgrass.nn import ModelF, ModelH, ModelQ, ModelQ0, ModelP0
 
 import torch
 import torch.nn as nn
