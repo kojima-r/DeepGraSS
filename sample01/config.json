@@ -1,0 +1,12 @@
+{
+	"data_train":"dataset/limit_cycle.train",
+	"data_test": "dataset/limit_cycle.test",
+	"learning_rate":0.01,
+	"state_dim":3,
+	"weight_decay":0,
+	"epoch":100,
+	"alpha_recons":2.0,
+	"alpha_temporal":1.0,
+	"without_sampling":true,
+	"result_path":"result"
+}
