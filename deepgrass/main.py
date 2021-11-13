@@ -10,7 +10,6 @@ import sys
 import tarfile
 import logging
 
-from six.moves import urllib
 import numpy as np
 import joblib
 import json
@@ -19,9 +18,7 @@ import argparse
 import deepgrass
 from deepgrass.data_util import load_data
 from deepgrass.plot_loss import plot_loss, plot_loss_detail
-from deepgrass.model import SSM
-from deepgrass.vssm import VariationalStateSpaceModel
-from deepgrass.nn import ModelF, ModelH, ModelQ, ModelQ0, ModelP0
+from deepgrass.build_model import build_model
 
 import torch
 import torch.nn as nn
@@ -76,6 +73,7 @@ def build_config(config):
 
 def get_default_config():
     config = {}
+    config["model_py"] = "deepgrass.nn"
     # data and network
     # config["dim"]=None
     config["state_dim"] = 2
@@ -159,39 +157,19 @@ def run_train_mode(config, logger):
     print("observation dimension:", train_data.obs_dim)
     print("input dimension:", train_data.input_dim)
     print("state dimension:", train_data.state_dim)
-    input_dim = train_data.input_dim if train_data.input_dim is not None else 0
-    state_dim = config["state_dim"]
-    obs_dim = train_data.obs_dim
-    obs_mask_enabled = train_data.obs_mask is not None
-    if obs_mask_enabled:
+    if train_data.obs_mask is not None:
         print("observation mask:", train_data.obs_mask.shape)
     else:
         print("observation mask: no")
-    #
+
     if torch.cuda.is_available():
         device = 'cuda'
         print("device: cuda")
     else:
         device = 'cpu'
         print("device: cpu")
-    # defining system
-    sys = VariationalStateSpaceModel(
-            obs_dim =obs_dim, state_dim=state_dim, input_dim=input_dim,
-            model_f =ModelF(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_h =ModelH(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_p0=ModelP0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_q =ModelQ(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim,obs_mask_enabled=obs_mask_enabled),
-            model_q0=ModelQ0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim, obs_mask_enabled=obs_mask_enabled),
-            delta_t=config["delta_t"],
-            alpha={
-                "recons":config["alpha_recons"],
-                "temporal":config["alpha_temporal"],
-                "beta":config["beta"],
-            },
-            device=device
-            )
-    # training NN from data
-    model = SSM(config, sys, device=device)
+
+    model=build_model(config,train_data,device=device)
     train_loss,valid_loss,flag = model.fit(train_data, valid_data)
 
     joblib.dump(train_loss, config["save_model_path"]+"/train_loss.pkl")
@@ -236,10 +214,6 @@ def run_pred_mode(config, logger):
     print("observation dimension:", all_data.obs_dim)
     print("input dimension:", all_data.input_dim)
     print("state dimension:", all_data.state_dim)
-    input_dim = all_data.input_dim if all_data.input_dim is not None else 0
-    state_dim = config["state_dim"]
-    obs_dim = all_data.obs_dim
-    obs_mask_enabled = train_data.obs_mask is not None
     #
     if torch.cuda.is_available():
         device = 'cuda'
@@ -248,23 +222,7 @@ def run_pred_mode(config, logger):
         device = 'cpu'
         print("device: cpu")
     # defining system
-    sys = VariationalStateSpaceModel(
-            obs_dim =obs_dim, state_dim=state_dim, input_dim=input_dim,
-            model_f =ModelF(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_h =ModelH(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_p0=ModelP0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_q =ModelQ(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim, obs_mask_enabled=obs_mask_enabled),
-            model_q0=ModelQ0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim, obs_mask_enabled=obs_mask_enabled),
-            delta_t =config["delta_t"],
-            alpha={
-                "recons":config["alpha_recons"],
-                "temporal":config["alpha_temporal"],
-                "beta":config["beta"],
-            },
-            device=device
-            )
-    # loading NN from data
-    model = SSM(config, sys, device=device)
+    model=build_model(config,all_data,device=device)
     model.load_ckpt(config["load_model"])
     logger.info("... simulating data")
     loss, states, obs_gen = model.simulate_with_data(all_data)
@@ -278,6 +236,7 @@ def run_pred_mode(config, logger):
     logger.info("mean error: {}".format(mse))
     ####
     print("=== field")
+    state_dim = config["state_dim"]
     pt,vec=model.get_vector_field(state_dim, dim=[0,1],min_v=-3,max_v=3,delta=0.2)
     if "simulation_path" in config:
         os.makedirs(config["simulation_path"], exist_ok=True)
@@ -336,11 +295,12 @@ def main():
         else:
             parser.add_argument("--"+key, type=str, default=val, help="[config string]")
     args = parser.parse_args()
-    # config
+    
+    ## config
     config = get_default_config()
     for key, val in get_default_config().items():
         config[key]=getattr(args,key)
-    # 
+    
     if args.config is None:
         if not args.no_config:
             parser.print_help()
@@ -350,20 +310,21 @@ def main():
         fp = open(args.config, "r")
         config.update(json.load(fp))
     build_config(config)
-    # gpu/cpu
+    
+    ## gpu/cpu
     if args.cpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
     elif args.gpu is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    # profile
+    ## profile
     config["profile"] = args.profile
-    #
+    
+    ## logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("logger")
 
-    # setup
+    ## setup
     mode_list = args.mode.split(",")
-    # with tf.Graph().as_default(), tf.device('/cpu:0'):
     for mode in mode_list:
         # mode
         if mode == "train":
@@ -374,21 +335,8 @@ def main():
             if args.model is not None:
                 config["load_model"] = args.model
             run_pred_mode(config, logger)
-        elif mode == "filter":
-            if args.model is not None:
-                config["load_model"] = args.model
-            filtering(sess, config)
-        elif mode == "filter_discrete":
-            filter_discrete_forward(sess, config)
-        elif mode == "train_fivo":
-            train_fivo(sess, config)
-        elif mode == "field":
-            field(sess, config)
-        elif mode == "potential":
-            potential(sess, config)
-        elif args.mode == "filter_server":
-            filtering_server(sess, config=config)
 
+    ## save config
     if args.save_config is not None:
         print("[SAVE] config: ", args.save_config)
         fp = open(args.save_config, "w")

@@ -6,22 +6,19 @@ from torch.utils.data import DataLoader
 import logging
 import math
 
-
-"""
-
-Variational inference for state space model
-x_{t+1} ~ Dist(f(x_t,u_t))
-y_{t}   ~ Dist(h(x_t))
-y: observation
-x: state
-u: input
-
-e.g. Normal distribution
-x_{t+1}~ Normal(f_m(x_t,u_t),f_s(x_t,u_t))
-y_{t}  ~ Normal(h(x_t),1)
-
-"""
 class VariationalStateSpaceModel(torch.nn.Module):
+    """ Variational inference for state space model
+    x_{t+1} ~ Dist(f(x_t,u_t))
+    y_{t}   ~ Dist(h(x_t))
+    y: observation
+    x: state
+    u: input
+
+    e.g. Normal distribution
+    x_{t+1}~ Normal(f_m(x_t,u_t),f_s(x_t,u_t))
+    y_{t}  ~ Normal(h(x_t),1)
+
+    """
     def __init__(
         self,
         obs_dim,
