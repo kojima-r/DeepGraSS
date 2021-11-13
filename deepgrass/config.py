@@ -2,11 +2,12 @@ import json
 import argparse
 import os
 
-def build_config(user_config, args):
+def build_config(user_config, args=None):
     ## config
     config = get_default_config()
-    for key, val in get_default_config().items():
-        config[key]=getattr(args,key)
+    if args is not None:
+        for key, val in get_default_config().items():
+            config[key]=getattr(args,key)
     config.update(user_config)
     build_config_(config)
     return config
