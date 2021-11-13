@@ -73,6 +73,8 @@ def get_default_config():
     config["hidden_layer_f"] = [32]
     config["hidden_layer_g"] = [32]
     config["hidden_layer_h"] = [32]
+    
+    config["without_sampling"] = False
     """
     config["alpha"] = 1.0
     config["beta"] = 1.0

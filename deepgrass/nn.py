@@ -7,7 +7,7 @@ import logging
 import math
 
 class ModelH(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[8,8], activation=F.leaky_relu):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu):
         super(ModelH, self).__init__()
         linears=[]
         prev_d=state_dim
@@ -44,7 +44,7 @@ class ModelH(torch.nn.Module):
 
 
 class ModelF(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu,discrete_state=False):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16], activation=F.leaky_relu,discrete_state=False):
         super(ModelF, self).__init__()
         self.input_dim = input_dim
         linears=[]
@@ -74,8 +74,9 @@ class ModelF(torch.nn.Module):
             x = self.linears[i](x)
             x = self.activation(x)
         if not self.discrete_state:
-            m=self.out_mu(x)
+            m=current_state+self.out_mu(x)*0.01
             s=torch.clip(torch.nn.functional.softplus(self.out_sigma(x)),1.0e-10,1.0)
+            m=torch.clip(m,-2.0,2.0)
             return torch.distributions.Normal(m,s)
         else:
             m=self.out_mu(x)
@@ -159,7 +160,7 @@ class PositionalEncoding2(nn.Module):
 
 
 class ModelQ(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
         super(ModelQ, self).__init__()
         self.input_dim = input_dim
         if obs_mask_enabled:
@@ -183,8 +184,8 @@ class ModelQ(torch.nn.Module):
             prev_d=d
         self.linears = nn.ModuleList(linears)
 
-        self.out_mu = self.get_layer(prev_d, state_dim)
-        self.out_sigma = self.get_layer(prev_d, state_dim)
+        self.out_mu = self.get_layer(prev_d, state_dim,True)
+        self.out_sigma = self.get_layer(prev_d, state_dim,True)
         self.activation = activation
         self.pos_encoder = PositionalEncoding(d_model=8)
         self.padding=torch.nn.ConstantPad1d(3, 0)
@@ -192,10 +193,13 @@ class ModelQ(torch.nn.Module):
         self.obs_mask_enabled=obs_mask_enabled
 
 
-    def get_layer(self,in_d,out_d):
+    def get_layer(self,in_d,out_d,linear_flag=False):
         l=nn.Linear(in_d, out_d)
         #nn.init.kaiming_uniform_(l.weight)
-        nn.init.kaiming_normal_(l.weight,nonlinearity="leaky_relu")
+        if not linear_flag:
+            nn.init.kaiming_normal_(l.weight,nonlinearity="leaky_relu")
+        else:
+            nn.init.normal_(l.weight,0.0,0.01)
         return l
 
     def forward(self, x):
@@ -209,16 +213,16 @@ class ModelQ(torch.nn.Module):
         x2=current_state
         ###
 
-        
+        """
         ###
         ### RNN type
         ###
         xt=x1[:,:t+1,:]
         o,_ = self.rnn(xt)
         x1=o[:,t,:]
-        
-
         """
+
+        
         ###
         ### CNN type 1
         ###
@@ -229,7 +233,7 @@ class ModelQ(torch.nn.Module):
         x1 = self.activation(self.conv1(x1))
         x1 = self.activation(self.conv2(x1))
         x1 = torch.sum(x1,dim=2)
-        """
+        
 
         """
         ###
@@ -241,7 +245,7 @@ class ModelQ(torch.nn.Module):
         x1 = F.activation(self.conv3(x1))
         x1 = self.pos_encoder(self.conv4(x1),t)
         x1 = torch.sum(x1,dim=2)
-        #x1=x1[:,:,t]
+        x1=x1[:,:,t]
         """
         ###
         x=torch.cat([x1,x2],dim=1)
@@ -251,6 +255,7 @@ class ModelQ(torch.nn.Module):
         if not self.discrete_state:
             m=self.out_mu(x)
             s=torch.clip(torch.nn.functional.softplus(self.out_sigma(x)),1.0e-10,1.0)
+            m=torch.clip(m,-2.0,2.0)
             return torch.distributions.Normal(loc=m,scale=s)
         else:
             m=self.out_mu(x)
@@ -259,8 +264,8 @@ class ModelQ(torch.nn.Module):
 class ModelP0(torch.nn.Module):
     def __init__(self, obs_dim, state_dim, input_dim,discrete_state=False):
         super(ModelP0, self).__init__()
-        self.mu    = torch.nn.Parameter(torch.zeros(state_dim))
-        self.sigma = torch.nn.Parameter(torch.ones(state_dim))
+        self.mu    = torch.nn.Parameter(torch.zeros(state_dim)+torch.normal(0,0.01,size=(state_dim,)))
+        self.sigma = torch.nn.Parameter(torch.ones(state_dim)*0.5+torch.normal(0,0.01,size=(state_dim,)))
         self.discrete_state=discrete_state
     def forward(self):
         if not self.discrete_state:
@@ -273,7 +278,7 @@ class ModelP0(torch.nn.Module):
 
 
 class ModelQ0(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
         super(ModelQ0, self).__init__()
         self.input_dim = input_dim
         if obs_mask_enabled:
@@ -294,16 +299,20 @@ class ModelQ0(torch.nn.Module):
             prev_d=d
         self.linears = nn.ModuleList(linears)
 
-        self.out_mu = self.get_layer(prev_d, state_dim)
-        self.out_sigma = self.get_layer(prev_d, state_dim)
+        self.out_mu = self.get_layer(prev_d, state_dim,True)
+        self.out_sigma = self.get_layer(prev_d, state_dim,True)
         self.activation = activation
         self.discrete_state=discrete_state
         self.obs_mask_enabled=obs_mask_enabled
 
-    def get_layer(self,in_d,out_d):
+    def get_layer(self,in_d,out_d,linear_flag=False):
         l=nn.Linear(in_d, out_d)
         #nn.init.kaiming_uniform_(l.weight)
-        nn.init.kaiming_normal_(l.weight,nonlinearity="leaky_relu")
+        if not linear_flag:
+            nn.init.kaiming_normal_(l.weight,nonlinearity="leaky_relu")
+        else:
+            nn.init.normal_(l.weight,0.0,0.01)
+
         return l
 
     def forward(self, x):
@@ -328,6 +337,7 @@ class ModelQ0(torch.nn.Module):
         if not self.discrete_state:
             m=self.out_mu(x)
             s=torch.clip(torch.nn.functional.softplus(self.out_sigma(x)),1.0e-10,1.0)
+            m=torch.clip(m,-1.0,1.0)
             return torch.distributions.Normal(m,s)
         else:
             m=self.out_mu(x)

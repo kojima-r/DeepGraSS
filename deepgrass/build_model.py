@@ -28,6 +28,7 @@ def build_model(config,dataset,device=None):
                 "temporal":config["alpha_temporal"],
                 "beta":config["beta"],
             },
+            without_sampling=config["without_sampling"],
             device=device
             )
 

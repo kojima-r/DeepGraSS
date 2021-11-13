@@ -209,7 +209,7 @@ class SSM:
                 train_loss_logger.update(loss, loss_dict)
                 loss.backward()
                 # grad clipping by norm
-                torch.nn.utils.clip_grad_norm_(self.system_model.parameters(), max_norm=0.1, norm_type=2)
+                #torch.nn.utils.clip_grad_norm_(self.system_model.parameters(), max_norm=0.1, norm_type=2)
                 # grad clipping by value
                 #torch.nn.utils.clip_grad_norm_(self.system_model.parameters(), 1.0e-1)
                 optimizer.step()
