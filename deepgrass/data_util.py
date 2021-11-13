@@ -21,6 +21,8 @@ class SSMDataset(torch.utils.data.Dataset):
         if self.data.state is not None:
             out_state = self.data.state[idx]
             out["state"]=out_state
+        if self.data.obs_mask is not None:
+            out["obs_mask"] = self.data.obs_mask[idx]
 
         out_obs = self.data.obs[idx]
         if self.transform:
@@ -123,8 +125,6 @@ def load_all_data(name, config, logger=None):
     filename = name + ".obs_mask.npy"
     if os.path.exists(filename):
         data.obs_mask = np_load(filename, logger, dtype=np.float32, shape_num=3)
-    else:
-        data.obs_mask = np.ones_like(data.obs)
     ###
     filename = name + ".step.npy"
     if os.path.exists(filename):
@@ -160,7 +160,8 @@ def load_simple_data(filename, config, logger=None):
     if logger is None: logger=logging.getLogger(__name__)
     data = DiosData()
     data.obs = np_load(filename, logger, dtype=np.float32, shape_num=3)
-    data.obs_mask = np.ones_like(data.obs)
+    #data.obs_mask = np.ones_like(data.obs)
+    data.obs_mask = None
     data.num = data.obs.shape[0]
     data.idx = np.array(list(range(data.num)))
     s = data.obs.shape[1]

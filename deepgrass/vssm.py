@@ -44,7 +44,7 @@ class ModelH(torch.nn.Module):
 
 
 class ModelF(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu,discrete_state=False):
         super(ModelF, self).__init__()
         self.input_dim = input_dim
         linears=[]
@@ -59,6 +59,7 @@ class ModelF(torch.nn.Module):
         self.out_mu = self.get_layer(prev_d, state_dim)
         self.out_sigma = self.get_layer(prev_d, state_dim)
         self.activation = activation
+        self.discrete_state=discrete_state
 
     def get_layer(self,in_d,out_d):
         l=nn.Linear(in_d, out_d)
@@ -72,7 +73,7 @@ class ModelF(torch.nn.Module):
         for i in range(len(self.linears)):
             x = self.linears[i](x)
             x = self.activation(x)
-        if False:
+        if not self.discrete_state:
             m=self.out_mu(x)
             s=torch.clip(torch.nn.functional.softplus(self.out_sigma(x)),1.0e-10,1.0)
             return torch.distributions.Normal(m,s)
@@ -158,10 +159,15 @@ class PositionalEncoding2(nn.Module):
 
 
 class ModelQ(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
         super(ModelQ, self).__init__()
         self.input_dim = input_dim
-        self.conv1 = nn.Conv1d(obs_dim+input_dim, 8, kernel_size=3, padding='same')
+        if obs_mask_enabled:
+            in_dim = 2*obs_dim+input_dim
+        else:
+            in_dim = obs_dim+input_dim
+
+        self.conv1 = nn.Conv1d(in_dim, 8, kernel_size=3, padding='same')
         self.conv2 = nn.Conv1d(8, 8, kernel_size=3, padding='same')
         self.conv3 = nn.Conv1d(8, 8, kernel_size=3, padding='same')
         self.conv4 = nn.Conv1d(8, 8, kernel_size=3, padding='same')
@@ -182,6 +188,8 @@ class ModelQ(torch.nn.Module):
         self.activation = activation
         self.pos_encoder = PositionalEncoding(d_model=8)
         self.padding=torch.nn.ConstantPad1d(3, 0)
+        self.discrete_state=discrete_state
+        self.obs_mask_enabled=obs_mask_enabled
 
 
     def get_layer(self,in_d,out_d):
@@ -191,11 +199,13 @@ class ModelQ(torch.nn.Module):
         return l
 
     def forward(self, x):
-        obs,current_state, input_, t=x
+        obs, current_state, input_, obs_mask, t=x
         if self.input_dim ==0:
             x1=obs
         else:
-            x1=torch.cat([obs,input_],dim=1)
+            x1=torch.cat([obs,input_],dim=-1)
+        if self.obs_mask_enabled:
+            x1=torch.cat([x1,obs_mask],dim=-1)
         x2=current_state
         ###
 
@@ -238,7 +248,7 @@ class ModelQ(torch.nn.Module):
         for i in range(len(self.linears)):
             x = self.linears[i](x)
             x = self.activation(x)
-        if False:
+        if not self.discrete_state:
             m=self.out_mu(x)
             s=torch.clip(torch.nn.functional.softplus(self.out_sigma(x)),1.0e-10,1.0)
             return torch.distributions.Normal(loc=m,scale=s)
@@ -247,13 +257,13 @@ class ModelQ(torch.nn.Module):
             return torch.distributions.RelaxedOneHotCategorical(logits=m,temperature=1)
 
 class ModelP0(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim):
+    def __init__(self, obs_dim, state_dim, input_dim,discrete_state=False):
         super(ModelP0, self).__init__()
         self.mu    = torch.nn.Parameter(torch.zeros(state_dim))
         self.sigma = torch.nn.Parameter(torch.ones(state_dim))
-
+        self.discrete_state=discrete_state
     def forward(self):
-        if False:
+        if not self.discrete_state:
             s=torch.clip(self.sigma,1.0e-10,1.0)
             return torch.distributions.Normal(self.mu,s)
         else:
@@ -263,11 +273,16 @@ class ModelP0(torch.nn.Module):
 
 
 class ModelQ0(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[3], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
         super(ModelQ0, self).__init__()
         self.input_dim = input_dim
-        self.conv1 = nn.Conv1d(obs_dim+input_dim, 8, 2)
-        self.pool = nn.MaxPool1d(2)
+        if obs_mask_enabled:
+            in_dim = 2*obs_dim+input_dim
+        else:
+            in_dim = obs_dim+input_dim
+
+        self.conv1 = nn.Conv1d(in_dim, 8, 2)
+        self.pool  = nn.MaxPool1d(2)
         self.conv2 = nn.Conv1d(8, 8, 2)
         
         linears=[]
@@ -282,6 +297,8 @@ class ModelQ0(torch.nn.Module):
         self.out_mu = self.get_layer(prev_d, state_dim)
         self.out_sigma = self.get_layer(prev_d, state_dim)
         self.activation = activation
+        self.discrete_state=discrete_state
+        self.obs_mask_enabled=obs_mask_enabled
 
     def get_layer(self,in_d,out_d):
         l=nn.Linear(in_d, out_d)
@@ -290,11 +307,14 @@ class ModelQ0(torch.nn.Module):
         return l
 
     def forward(self, x):
-        obs, input_=x
+        obs, input_, obs_mask =x
         if self.input_dim ==0:
             x1=obs
         else:
-            x1=torch.cat([obs,input_],dim=1)
+            x1=torch.cat([obs,input_],dim=-1)
+        if self.obs_mask_enabled:
+            x1=torch.cat([x1,obs_mask],dim=-1)
+
         x1=x1.permute(0,2,1)
         ###
         x1 = self.pool(self.activation(self.conv1(x1)))
@@ -305,7 +325,7 @@ class ModelQ0(torch.nn.Module):
         for i in range(len(self.linears)):
             x = self.linears[i](x)
             x = self.activation(x)
-        if False:
+        if not self.discrete_state:
             m=self.out_mu(x)
             s=torch.clip(torch.nn.functional.softplus(self.out_sigma(x)),1.0e-10,1.0)
             return torch.distributions.Normal(m,s)
@@ -338,8 +358,8 @@ class VariationalStateSpaceModel(torch.nn.Module):
         model_f,
         model_h,
         model_p0,
-        model_v,
-        model_v0,
+        model_q,
+        model_q0,
         delta_t=0.1,
         alpha={},
         discrete_state=False,
@@ -358,13 +378,13 @@ class VariationalStateSpaceModel(torch.nn.Module):
         self.model_h = model_h
         self.model_f = model_f
         self.model_p0 = model_p0
-        self.model_v = model_v
-        self.model_v0 = model_v0
+        self.model_q = model_q
+        self.model_q0 = model_q0
         self.discrete_state=discrete_state
         self.without_sampling=without_sampling
 
     #posterior_estimation(obs, init_state, batch_size, step, input_)
-    def posterior_estimation(self,obs, batch_size, step, input_=None):
+    def posterior_estimation(self,obs, batch_size, step, input_=None, obs_mask=None):
         """
         Args:
             obs: batch_size x #step x obs_dim
@@ -379,10 +399,7 @@ class VariationalStateSpaceModel(torch.nn.Module):
         ###
         ### Estimating initial state
         ###
-        if input_ is None:
-            dist_q0=self.model_v0((obs, None))
-        else:
-            dist_q0=self.model_v0((obs, input_))
+        dist_q0=self.model_q0((obs, input_, obs_mask))
         if self.without_sampling:
             current_state = dist_q0.mean
         else:
@@ -397,10 +414,7 @@ class VariationalStateSpaceModel(torch.nn.Module):
             ###
             ### computing q(next state | current state ...)
             ###
-            if input_ is None:
-                next_dist_q=self.model_v((obs,current_state, None, t+1))
-            else:
-                next_dist_q=self.model_v((obs,current_state, input_, t+1))
+            next_dist_q=self.model_q((obs,current_state, input_, obs_mask, t+1))
             ### qs ~ q(...)
             if self.without_sampling:
                 next_state_qs=next_dist_q.mean
@@ -440,8 +454,12 @@ class VariationalStateSpaceModel(torch.nn.Module):
             idx=reample_dist.saple(100)
             new_particle=ps[idx]
             current_particle=new_particle
-        
-    def forward(self, obs, input_):
+
+    def simulate_one_step(self, state_t):
+        next_dist_p=self.model_f((state_t, None))
+        return next_dist_p.mean
+
+    def forward(self, obs, input_, obs_mask=None):
         """
         Args:
             obs: batch_size x #step x obs_dim
@@ -458,12 +476,14 @@ class VariationalStateSpaceModel(torch.nn.Module):
         ### q(z_{t+1}| z_{t}, x_{1:T}, u_{1:T})
         ### p(z_{t+1}| z_{t}, u_{t})
         ###
-        state,state_dist_q,state_dist_p = self.posterior_estimation(obs, batch_size, step, input_)
+        state,state_dist_q,state_dist_p = self.posterior_estimation(obs, batch_size, step, input_, obs_mask)
         obs_generated=self.model_h(state)
         ###
         ### observation loss: negative log likelihood
         ###
         nll=-obs_generated.log_prob(obs)
+        if obs_mask is not None:
+            nll=nll*obs_mask
         loss_recons = torch.sum(nll,dim=(1,2)) #torch.sum((obs - obs_generated) ** 2,dim=-1)
         loss_sum_recons=loss_recons.mean(dim=0)
         

@@ -67,13 +67,15 @@ class SSM:
         self.logger = logging.getLogger("logger")
 
     def _simulate_with_batch(self, batch, step_wise_loss=False):
-        obs, input_, state = None, None, None
+        obs, input_, state, obs_mask = None, None, None, None
         obs=batch["obs"]
         if "input" in batch:
             input_ = batch["input"]
+        if "obs_mask" in batch:
+            obs_mask = batch["obs_mask"]
         if "state" in batch:
             state = batch["state"]
-        loss_dict, state_generated, obs_generated = self.system_model.forward(obs, input_)
+        loss_dict, state_generated, obs_generated = self.system_model.forward(obs, input_, obs_mask)
         loss = 0
         for k, v in loss_dict.items():
             if k[0]!="*":
@@ -81,13 +83,15 @@ class SSM:
         return loss, loss_dict, state_generated, obs_generated
 
     def _compute_batch_loss(self, batch, epoch):
-        obs, input_, state = None, None, None
+        obs, input_, state, obs_mask = None, None, None, None
         obs=batch["obs"]
         if "input" in batch:
             input_ = batch["input"]
+        if "obs_mask" in batch:
+            obs_mask = batch["obs_mask"]
         if "state" in batch:
             state = batch["state"]
-        loss_dict,_,_ = self.system_model(obs, input_)
+        loss_dict,_,_ = self.system_model(obs, input_, obs_mask)
         loss = 0
         for k, v in loss_dict.items():
             if k[0]!="*":

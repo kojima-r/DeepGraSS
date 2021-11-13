@@ -161,6 +161,11 @@ def run_train_mode(config, logger):
     input_dim = train_data.input_dim if train_data.input_dim is not None else 0
     state_dim = config["state_dim"]
     obs_dim = train_data.obs_dim
+    obs_mask_enabled = train_data.obs_mask is not None
+    if obs_mask_enabled:
+        print("observation mask:", train_data.obs_mask.shape)
+    else:
+        print("observation mask: no")
     #
     if torch.cuda.is_available():
         device = 'cuda'
@@ -170,12 +175,12 @@ def run_train_mode(config, logger):
         print("device: cpu")
     # defining system
     sys = VariationalStateSpaceModel(
-            obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim,
-            model_f=ModelF(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_h=ModelH(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
+            obs_dim =obs_dim, state_dim=state_dim, input_dim=input_dim,
+            model_f =ModelF(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
+            model_h =ModelH(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
             model_p0=ModelP0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_variational=ModelQ(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_variational0=ModelQ0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
+            model_q =ModelQ(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim,obs_mask_enabled=obs_mask_enabled),
+            model_q0=ModelQ0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim, obs_mask_enabled=obs_mask_enabled),
             delta_t=config["delta_t"],
             alpha={
                 "recons":config["alpha_recons"],
@@ -230,9 +235,10 @@ def run_pred_mode(config, logger):
     print("observation dimension:", all_data.obs_dim)
     print("input dimension:", all_data.input_dim)
     print("state dimension:", all_data.state_dim)
-    input_dim = all_data.input_dim if all_data.input_dim is not None else 1
+    input_dim = all_data.input_dim if all_data.input_dim is not None else 0
     state_dim = config["state_dim"]
     obs_dim = all_data.obs_dim
+    obs_mask_enabled = train_data.obs_mask is not None
     #
     if torch.cuda.is_available():
         device = 'cuda'
@@ -242,13 +248,13 @@ def run_pred_mode(config, logger):
         print("device: cpu")
     # defining system
     sys = VariationalStateSpaceModel(
-            obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim,
-            model_f=ModelF(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_h=ModelH(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
+            obs_dim =obs_dim, state_dim=state_dim, input_dim=input_dim,
+            model_f =ModelF(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
+            model_h =ModelH(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
             model_p0=ModelP0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_variational=ModelQ(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            model_variational0=ModelQ0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim),
-            delta_t=config["delta_t"],
+            model_q =ModelQ(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim, obs_mask_enabled=obs_mask_enabled),
+            model_q0=ModelQ0(obs_dim=obs_dim, state_dim=state_dim, input_dim=input_dim, obs_mask_enabled=obs_mask_enabled),
+            delta_t =config["delta_t"],
             alpha={
                 "recons":config["alpha_recons"],
                 "temporal":config["alpha_temporal"],
