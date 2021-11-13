@@ -20,13 +20,13 @@ class LossLogger:
         self.running_count = 0
 
     def update(self, loss, loss_dict):
-        self.running_loss += loss.detach().to('cpu')
+        self.running_loss += loss.detach().to("cpu").numpy()
         self.running_count +=1
         for k, v in loss_dict.items():
             if k in self.running_loss_dict:
-                self.running_loss_dict[k] += v.detach().to('cpu')
+                self.running_loss_dict[k] += v.detach().to("cpu").numpy()
             else:
-                self.running_loss_dict[k] = v.detach().to('cpu')
+                self.running_loss_dict[k] = v.detach().to("cpu").numpy()
 
     def end_epoch(self,mean_flag=True):
         if mean_flag:
@@ -114,14 +114,14 @@ class SSM:
         state_t=torch.tensor(state,dtype=torch.float32,device=self.device)
         next_state = self.system_model.simulate_one_step(state_t)
         vec = next_state-state_t
-        return state, vec.detach().to('cpu')
+        return state, vec.detach().to("cpu").numpy()
 
     def simulate_with_input(self, input_data, init_state, step=100):
         if input_data is not None:
             input_data=input_data.to(self.device)
         init_state=init_state.to(self.device)
         state, obs_generated=self.system_model.simulate(init_state, batch_size=init_state.shape[0], step=step, input_=input_data)
-        return state.detach().to('cpu'),obs_generated.detach().to('cpu')
+        return state.detach().numpy(),obs_generated.detach().numpy()
 
 
     def simulate_with_data(self, valid_data):
@@ -148,7 +148,7 @@ class SSM:
         print(valid_loss_logger.get_msg("valid"))
         out_state_generated = torch.cat(state_generated_list, dim=0)
         out_obs_generated = torch.cat(obs_generated_list, dim=0)
-        return valid_loss_logger, out_state_generated, out_obs_generated
+        return valid_loss_logger, out_state_generated.detach().to("cpu").numpy(), out_obs_generated.detach().to("cpu").numpy()
 
     def save(self,path):
         self.logger.info("[save model]"+path)

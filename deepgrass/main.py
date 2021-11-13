@@ -46,6 +46,35 @@ class NumPyArangeEncoder(json.JSONEncoder):
         if isinstance(obj, np.ndarray):
             return obj.tolist()  # or map(int, obj)
         return json.JSONEncoder.default(self, obj)
+    
+def save_simulation(config,data,states,obs_gen):
+    if "simulation_path" in config:
+        os.makedirs(config["simulation_path"], exist_ok=True)
+        filename=config["simulation_path"]+"/obs.npy"
+        print("[SAVE]", filename)
+        np.save(filename, data.obs)
+        if data.state is not None:
+            filename=config["simulation_path"]+"/state_true.npy"
+            print("[SAVE]", filename)
+            np.save(filename, data.state)
+        if data.input is not None:
+            filename=config["simulation_path"]+"/input.npy"
+            print("[SAVE]", filename)
+            np.save(filename, data.input)
+        filename=config["simulation_path"]+"/obs_gen.npy"
+        print("[SAVE]", filename)
+        np.save(filename, obs_gen)
+        filename=config["simulation_path"]+"/states.npy"
+        print("[SAVE]", filename)
+        np.save(filename, states)
+
+def set_file_logger(logger,config,filename):
+    if "log_path" in config:
+        filename=config["log_path"]+"/"+filename
+        h = logging.FileHandler(filename=filename, mode="w")
+        h.setLevel(logging.INFO)
+        logger.addHandler(h)
+
 
 def run_train_mode(config, logger):
     logger.info("... loading data")
@@ -82,28 +111,6 @@ def run_train_mode(config, logger):
     save_simulation(config,valid_data,states,obs_gen)
     joblib.dump(loss, config["simulation_path"]+"/last_loss.pkl")
     
-    
-def save_simulation(config,data,states,obs_gen):
-    if "simulation_path" in config:
-        os.makedirs(config["simulation_path"], exist_ok=True)
-        filename=config["simulation_path"]+"/obs.npy"
-        print("[SAVE]", filename)
-        np.save(filename, data.obs)
-        if data.state is not None:
-            filename=config["simulation_path"]+"/state_true.npy"
-            print("[SAVE]", filename)
-            np.save(filename, data.state)
-        if data.input is not None:
-            filename=config["simulation_path"]+"/input.npy"
-            print("[SAVE]", filename)
-            np.save(filename, data.input)
-        filename=config["simulation_path"]+"/obs_gen.npy"
-        print("[SAVE]", filename)
-        np.save(filename, obs_gen.to("cpu").detach().numpy().copy())
-        filename=config["simulation_path"]+"/states.npy"
-        print("[SAVE]", filename)
-        np.save(filename, states.to("cpu").detach().numpy().copy())
-
 
 def run_pred_mode(config, logger):
     logger.info("... loading data")
@@ -127,7 +134,6 @@ def run_pred_mode(config, logger):
     logger.info("... simulating data")
     loss, states, obs_gen = model.simulate_with_data(all_data)
     save_simulation(config,all_data,states,obs_gen)
-    obs_gen=obs_gen.to("cpu").detach().numpy().copy()
     ##
     x=np.sum((all_data.obs-obs_gen)**2,axis=2)
     x=np.mean(x,axis=1)
@@ -148,13 +154,6 @@ def run_pred_mode(config, logger):
         np.save(filename, vec)
     ####
 
-def set_file_logger(logger,config,filename):
-    if "log_path" in config:
-        filename=config["log_path"]+"/"+filename
-        h = logging.FileHandler(filename=filename, mode="w")
-        h.setLevel(logging.INFO)
-        logger.addHandler(h)
-    
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", type=str, help="train/infer")
