@@ -7,7 +7,7 @@ import logging
 import math
 
 class ModelH(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu, config=None):
         super(ModelH, self).__init__()
         linears=[]
         prev_d=state_dim
@@ -44,7 +44,7 @@ class ModelH(torch.nn.Module):
 
 
 class ModelF(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16], activation=F.leaky_relu,discrete_state=False):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16], activation=F.leaky_relu,discrete_state=False, config=None):
         super(ModelF, self).__init__()
         self.input_dim = input_dim
         linears=[]
@@ -160,7 +160,7 @@ class PositionalEncoding2(nn.Module):
 
 
 class ModelQ(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False, config=None):
         super(ModelQ, self).__init__()
         self.input_dim = input_dim
         if obs_mask_enabled:
@@ -262,7 +262,7 @@ class ModelQ(torch.nn.Module):
             return torch.distributions.RelaxedOneHotCategorical(logits=m,temperature=1)
 
 class ModelP0(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim,discrete_state=False):
+    def __init__(self, obs_dim, state_dim, input_dim,discrete_state=False, config=None):
         super(ModelP0, self).__init__()
         self.mu    = torch.nn.Parameter(torch.zeros(state_dim)+torch.normal(0,0.01,size=(state_dim,)))
         self.sigma = torch.nn.Parameter(torch.ones(state_dim)*0.5+torch.normal(0,0.01,size=(state_dim,)))
@@ -278,7 +278,7 @@ class ModelP0(torch.nn.Module):
 
 
 class ModelQ0(torch.nn.Module):
-    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu,discrete_state=False, obs_mask_enabled=False):
+    def __init__(self, obs_dim, state_dim, input_dim, h_dim=[16,16], activation=F.leaky_relu, discrete_state=False, obs_mask_enabled=False, config=None):
         super(ModelQ0, self).__init__()
         self.input_dim = input_dim
         if obs_mask_enabled:
